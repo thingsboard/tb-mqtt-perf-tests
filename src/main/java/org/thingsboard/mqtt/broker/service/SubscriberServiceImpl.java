@@ -83,7 +83,7 @@ public class SubscriberServiceImpl implements SubscriberService {
 
             MqttClient subClient;
             if (subscriberGroup.getPersistentSessionInfo() != null && PersistentClientType.APPLICATION == subscriberGroup.getPersistentSessionInfo().getClientType()) {
-                subClient = getClient(clientId, null, cleanSession, subscribeStats, subscriberInfo);
+                subClient = getClient(clientId, MqttPerformanceTest.APP_USER_NAME, cleanSession, subscribeStats, subscriberInfo);
             } else {
                 subClient = getClient(clientId, MqttPerformanceTest.DEFAULT_USER_NAME, cleanSession, subscribeStats, subscriberInfo);
             }
@@ -129,8 +129,13 @@ public class SubscriberServiceImpl implements SubscriberService {
         try {
             long now = System.currentTimeMillis();
             byte[] mqttMessageBytes = toBytes(mqttMessageByteBuf);
-            Message message = mapper.readValue(mqttMessageBytes, Message.class);
-            if (message.isWarmUpMsg()) {
+
+            Message message = null;
+            try {
+                message = mapper.readValue(mqttMessageBytes, Message.class);
+            } catch (Exception ignored) {
+            }
+            if (message == null) {
                 return;
             }
             long msgLatency = receivedTime - message.getCreateTime();

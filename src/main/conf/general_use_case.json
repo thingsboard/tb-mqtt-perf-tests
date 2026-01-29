@@ -3,74 +3,57 @@
     {
       "id": 1,
       "publishers": 200,
-      "topicPrefix": "europe/ua/kyiv/tb/",
+      "topicPrefix": "check/demo/topic/",
       "clientIdPrefix": null
     },
     {
       "id": 2,
-      "publishers":50,
-      "topicPrefix": "europe/ua/kyiv/",
+      "publishers": 100,
+      "topicPrefix": "flux/void/entropy/",
       "clientIdPrefix": null
     },
     {
       "id": 3,
-      "publishers": 150,
-      "topicPrefix": "asia/",
+      "publishers": 50,
+      "topicPrefix": "matrix/level42/glitch/",
       "clientIdPrefix": null
     }
   ],
   "subscriberGroups": [
     {
       "id": 1,
-      "subscribers": 150,
-      "topicFilter": "europe/ua/kyiv/tb/+",
-      "expectedPublisherGroups": [1],
-      "persistentSessionInfo": null,
-      "clientIdPrefix": null
-    },
-    {
-      "id": 2,
-      "subscribers": 50,
-      "topicFilter": "europe/ua/kyiv/#",
-      "expectedPublisherGroups": [1, 2],
-      "persistentSessionInfo": null,
-      "clientIdPrefix": null
-    },
-    {
-      "id": 3,
-      "subscribers": 10,
-      "topicFilter": "#",
-      "expectedPublisherGroups": [1, 2, 3],
+      "subscribers": 15,
+      "topicFilter": "check/demo/topic/+",
+      "expectedPublisherGroups": [
+        1
+      ],
       "persistentSessionInfo": {
         "clientType": "APPLICATION"
       },
       "clientIdPrefix": null
     },
     {
-      "id": 4,
-      "subscribers": 20,
-      "topicFilter": "europe/ua/kyiv/tb/#",
-      "expectedPublisherGroups": [1],
-      "persistentSessionInfo": {
-        "clientType": "DEVICE"
-      },
+      "id": 2,
+      "subscribers": 50,
+      "topicFilter": "flux/void/entropy/#",
+      "expectedPublisherGroups": [
+        2
+      ],
+      "persistentSessionInfo": null,
       "clientIdPrefix": null
     },
     {
-      "id": 5,
+      "id": 3,
       "subscribers": 10,
-      "topicFilter": "europe/ua/kyiv/#",
+      "topicFilter": "matrix/level42/glitch/+",
       "expectedPublisherGroups": [
-        1,
-        2
+        3
       ],
-      "persistentSessionInfo": {
-        "clientType": "DEVICE"
-      },
+      "persistentSessionInfo": null,
       "clientIdPrefix": null
     }
   ],
-  "dummyClients": 1000,
+  "dummyClients": 500,
   "secondsToRun": 60,
   "additionalSecondsToWait": 30,
   "maxMsgsPerPublisherPerSecond": 1,

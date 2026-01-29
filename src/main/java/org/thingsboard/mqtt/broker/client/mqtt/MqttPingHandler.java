@@ -73,7 +73,7 @@ final class MqttPingHandler extends ChannelInboundHandlerAdapter {
     }
 
     private void sendPingReq(Channel channel) {
-        log.info("Sending ping request!");
+        log.debug("Sending ping request!");
         MqttFixedHeader fixedHeader = new MqttFixedHeader(MqttMessageType.PINGREQ, false, MqttQoS.AT_MOST_ONCE, false, 0);
         channel.writeAndFlush(new MqttMessage(fixedHeader));
 

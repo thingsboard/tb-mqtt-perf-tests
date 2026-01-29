@@ -520,7 +520,8 @@ final class MqttClientImpl implements MqttClient {
         return pendingSubscriptions;
     }
 
-    HashMultimap<String, MqttSubscription> getSubscriptions() {
+    @Override
+    public HashMultimap<String, MqttSubscription> getSubscriptions() {
         return subscriptions;
     }
 

@@ -30,7 +30,6 @@ import org.thingsboard.mqtt.broker.data.ClientCredentialsType;
 import org.thingsboard.mqtt.broker.data.Message;
 import org.thingsboard.mqtt.broker.data.PersistentClientType;
 import org.thingsboard.mqtt.broker.data.PublisherGroup;
-import org.thingsboard.mqtt.broker.data.SubscriberAnalysisResult;
 import org.thingsboard.mqtt.broker.data.SubscriberGroup;
 import org.thingsboard.mqtt.broker.data.dto.MqttClientCredentialsDto;
 import org.thingsboard.mqtt.broker.service.DummyClientService;
@@ -59,6 +58,7 @@ public class MqttPerformanceTest {
 
     private static final ObjectMapper mapper = new ObjectMapper();
     public static final String DEFAULT_USER_NAME = "default";
+    public static final String APP_USER_NAME = "app";
 
     private final DummyClientService dummyClientService;
     private final SubscriberService subscriberService;
@@ -96,6 +96,8 @@ public class MqttPerformanceTest {
 
         log.info("Setting resource leak detector level to {}", leakDetectorLevel);
         ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.valueOf(leakDetectorLevel.toUpperCase()));
+
+        runTest();
     }
 
     public void runTest() throws Exception {
@@ -103,12 +105,6 @@ public class MqttPerformanceTest {
 
         printTestRunConfiguration();
 
-        final UUID defaultCredentialsId = createDefaultMqttCredentials();
-
-        log.info("Start clear persisted Sessions.");
-        persistedMqttClientService.clearPersistedSessions();
-        persistedMqttClientService.removeApplicationClients();
-        Thread.sleep(2000);
         persistedMqttClientService.initApplicationClients();
 
         SubscribeStats subscribeStats = new SubscribeStats(new DescriptiveStatistics(), new DescriptiveStatistics());
@@ -122,10 +118,6 @@ public class MqttPerformanceTest {
         publisherService.connectPublishers();
 
         dummyClientService.connectDummyClients();
-
-        Thread.sleep(2000);
-        publisherService.warmUpPublishers();
-        Thread.sleep(publisherWarmUpSleepMs);
 
         boolean orchestratorNotified = testRestService.notifyNodeIsReady();
         if (orchestratorNotified) {
@@ -141,34 +133,6 @@ public class MqttPerformanceTest {
             printLatencyStats(generalLatencyStats, msgProcessingLatencyStats, acknowledgedStats, sentStats);
             clearStats(generalLatencyStats, msgProcessingLatencyStats, acknowledgedStats, sentStats);
         }, period, period, TimeUnit.SECONDS);
-
-        Thread.sleep(TimeUnit.SECONDS.toMillis(testRunConfiguration.getSecondsToRun() + testRunConfiguration.getAdditionalSecondsToWait()));
-
-        subscriberService.disconnectSubscribers();
-        publisherService.disconnectPublishers();
-        dummyClientService.disconnectDummyClients();
-
-        // wait for all MQTT clients to close
-        Thread.sleep(waitTimeAfterDisconnectsMs);
-
-        persistedMqttClientService.clearPersistedSessions();
-
-        SubscriberAnalysisResult analysisResult = subscriberService.analyzeReceivedMessages();
-        log.info("Messages stats: lost messages - {}, duplicated messages - {}.",
-                analysisResult.getLostMessages(), analysisResult.getDuplicatedMessages()
-        );
-        printLatencyStats(generalLatencyStats, msgProcessingLatencyStats, acknowledgedStats, sentStats);
-
-        publisherService.printDebugPublishersStats();
-        subscriberService.printDebugSubscribersStats();
-
-        // wait for all MQTT clients to close
-        Thread.sleep(waitTimeClientsClosedMs);
-        persistedMqttClientService.removeApplicationClients();
-
-        removeDefaultCredentials(defaultCredentialsId);
-
-        log.info("Performance test finished.");
     }
 
     private void printLatencyStats(DescriptiveStatistics generalLatencyStats, DescriptiveStatistics msgProcessingLatencyStats,
@@ -239,7 +203,7 @@ public class MqttPerformanceTest {
             totalPublishedMessages = totalPublishers * testRunConfiguration.getTotalPublisherMessagesCount();
             totalExpectedReceivedMessages = subscriberService.calculateTotalExpectedReceivedMessages();
         }
-        Message randomMsg = new Message(System.currentTimeMillis(), true, payloadGenerator.generatePayload());
+        Message randomMsg = new Message(System.currentTimeMillis(), payloadGenerator.generatePayload());
         log.info("Test run info: publishers - {}, non-persistent subscribers - {}, regular persistent subscribers - {}, " +
                         "'APPLICATION' persistent subscribers - {}, dummy client connections - {}, " +
                         "publisher QoS - {}, subscriber QoS - {}, max messages per second - {}, " +

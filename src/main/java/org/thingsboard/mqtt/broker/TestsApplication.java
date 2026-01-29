@@ -18,8 +18,6 @@ package org.thingsboard.mqtt.broker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.ConfigurableApplicationContext;
-import org.thingsboard.mqtt.broker.tests.MqttPerformanceTest;
 
 import java.util.Arrays;
 
@@ -30,14 +28,11 @@ public class TestsApplication {
     private static final String DEFAULT_SPRING_CONFIG_PARAM = SPRING_CONFIG_NAME_KEY + "=" + "tb-mqtt-broker-performance-tests";
 
     public static void main(String[] args) throws Exception {
-        ConfigurableApplicationContext ctx = SpringApplication.run(TestsApplication.class, updateArguments(args));
         try {
-            ctx.getBean(MqttPerformanceTest.class).runTest();
+            SpringApplication.run(TestsApplication.class, updateArguments(args));
         } catch (Exception e) {
-            log.error("Failed to run test", e);
-        } finally {
-            int exitCode = SpringApplication.exit(ctx, () -> 0);
-            System.exit(exitCode);
+            log.error("Failed to start application.", e);
+            System.exit(1);
         }
     }
 

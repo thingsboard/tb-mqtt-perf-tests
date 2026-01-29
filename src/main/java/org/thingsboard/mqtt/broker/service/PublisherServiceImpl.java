@@ -20,6 +20,7 @@ import com.google.common.collect.Iterables;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
+import io.netty.handler.codec.mqtt.MqttQoS;
 import jakarta.annotation.PreDestroy;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -49,6 +50,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -138,7 +140,7 @@ public class PublisherServiceImpl implements PublisherService {
 
             for (PublisherInfo publisherInfo : publisherInfos.values()) {
                 try {
-                    Message message = new Message(System.currentTimeMillis(), true, payloadGenerator.generatePayload());
+                    Message message = new Message(System.currentTimeMillis(), payloadGenerator.generatePayload());
                     publisherInfo.getPublisher().publish(publisherInfo.getTopic(), toByteBuf(mapper.writeValueAsBytes(message)),
                             CallbackUtil.createCallback(
                                     warmupCDL::countDown,
@@ -175,7 +177,6 @@ public class PublisherServiceImpl implements PublisherService {
         final Iterator<PublisherInfo> publisherInfoIterator = Iterables.cycle(publisherInfos.values()).iterator();
         DescriptiveStatistics publishSentLatencyStats = new DescriptiveStatistics();
         DescriptiveStatistics publishAcknowledgedStats = new DescriptiveStatistics();
-        AtomicInteger publishedMessagesPerPublisher = new AtomicInteger();
         int publishPeriodMs = 1000 / testRunConfiguration.getMaxMessagesPerPublisherPerSecond();
         AtomicLong lastPublishTickTime = new AtomicLong(System.currentTimeMillis());
 
@@ -185,22 +186,23 @@ public class PublisherServiceImpl implements PublisherService {
         if (maxTotalClientsPerIteration > 0) {
             chunkSize = maxTotalClientsPerIteration / chunkSizeDivider;
         } else {
-            chunkSize = publisherInfos.values().size() / chunkSizeDivider;
+            chunkSize = publisherInfos.size() / chunkSizeDivider;
         }
         log.info("Chunk size is {}", chunkSize);
 
+        int minChunkSize = Math.max(1, chunkSize / 7); // Ensure at least 1 message
+        log.info("Load profile: Random between {} and {} messages per tick", minChunkSize, chunkSize);
+
         publishScheduler.scheduleAtFixedRate(() -> {
-            if (publishedMessagesPerPublisher.getAndIncrement() / chunkSizeDivider >= testRunConfiguration.getTotalPublisherMessagesCount()) {
-                return;
-            }
             long now = System.currentTimeMillis();
             long actualPublishTickPause = now - lastPublishTickTime.getAndSet(now);
             if (actualPublishTickPause > publishPeriodMs * 1.5) {
                 if (log.isDebugEnabled()) {
-                    log.debug("Pause between ticks is bigger than expected, expected pause - {} ms, actual pause - {} ms", publishPeriodMs, actualPublishTickPause);
+                    log.debug("Pause too long: expected {} ms, actual {} ms", publishPeriodMs, actualPublishTickPause);
                 }
             }
-            for (int i = 0; i < chunkSize; i++) {
+            int currentTickChunkSize = ThreadLocalRandom.current().nextInt(minChunkSize, chunkSize + 1);
+            for (int i = 0; i < currentTickChunkSize; i++) {
                 process(publishSentLatencyStats, publishAcknowledgedStats, publisherInfoIterator.next());
             }
         }, 0, shortenedPublishPeriodMs, TimeUnit.MILLISECONDS);
@@ -209,10 +211,21 @@ public class PublisherServiceImpl implements PublisherService {
 
     private void process(DescriptiveStatistics publishSentLatencyStats, DescriptiveStatistics publishAcknowledgedStats, PublisherInfo publisherInfo) {
         try {
-            byte[] payload = payloadGenerator.generatePayload();
-            Message message = new Message(System.currentTimeMillis(), false, payload);
-            byte[] messageBytes = mapper.writeValueAsBytes(message);
-            ChannelFuture publishSentFuture = publisherInfo.getPublisher().publish(publisherInfo.getTopic(), toByteBuf(messageBytes),
+            String topic;
+            byte[] dataToSend;
+            Message message = new Message(System.currentTimeMillis(), null);
+
+            if (ThreadLocalRandom.current().nextDouble() < 0.4) {
+                topic = TopicDictionary.getRandomPublishTopic(publisherInfo.getClientId());
+                dataToSend = SmartPayloadGenerator.generatePayload(topic);
+            } else {
+                topic = publisherInfo.getTopic();
+                byte[] payload = payloadGenerator.generatePayload();
+                message.setPayload(payload);
+                dataToSend = mapper.writeValueAsBytes(message);
+            }
+
+            ChannelFuture publishSentFuture = publisherInfo.getPublisher().publish(topic, toByteBuf(dataToSend),
                     CallbackUtil.createCallback(
                             () -> {
                                 long ackLatency = System.currentTimeMillis() - message.getCreateTime();
@@ -226,7 +239,7 @@ public class PublisherServiceImpl implements PublisherService {
                             },
                             t -> log.error("[{}] Failed to send msg.", publisherInfo.getClientId(), t)
                     ),
-                    testRunConfiguration.getPublisherQoS());
+                    MqttQoS.valueOf(ThreadLocalRandom.current().nextInt(0, 3)));
             publishSentFuture
                     .addListener(future -> {
                                 if (!future.isSuccess()) {

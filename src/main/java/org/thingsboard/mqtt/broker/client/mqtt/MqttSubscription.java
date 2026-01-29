@@ -17,7 +17,7 @@ package org.thingsboard.mqtt.broker.client.mqtt;
 
 import java.util.regex.Pattern;
 
-final class MqttSubscription {
+public final class MqttSubscription {
 
     private final String topic;
     private final Pattern topicRegex;

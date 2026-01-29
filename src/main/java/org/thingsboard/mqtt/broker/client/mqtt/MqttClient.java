@@ -15,6 +15,7 @@
  */
 package org.thingsboard.mqtt.broker.client.mqtt;
 
+import com.google.common.collect.HashMultimap;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -207,4 +208,5 @@ public interface MqttClient {
      */
     void setClientCallback(MqttClientCallback clientCallback);
 
+    HashMultimap<String, MqttSubscription> getSubscriptions();
 }

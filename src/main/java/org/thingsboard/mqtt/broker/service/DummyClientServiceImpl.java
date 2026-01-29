@@ -15,6 +15,9 @@
  */
 package org.thingsboard.mqtt.broker.service;
 
+import com.google.common.collect.HashMultimap;
+import io.netty.handler.codec.mqtt.MqttQoS;
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,16 +26,23 @@ import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 import org.thingsboard.mqtt.broker.client.mqtt.MqttClient;
+import org.thingsboard.mqtt.broker.client.mqtt.MqttSubscription;
 import org.thingsboard.mqtt.broker.config.TestRunClusterConfig;
 import org.thingsboard.mqtt.broker.config.TestRunConfiguration;
 import org.thingsboard.mqtt.broker.tests.MqttPerformanceTest;
 import org.thingsboard.mqtt.broker.util.CallbackUtil;
+import org.thingsboard.mqtt.broker.util.ThingsBoardThreadFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -45,8 +55,98 @@ public class DummyClientServiceImpl implements DummyClientService {
     private final ClientIdService clientIdService;
     private final TestRunClusterConfig testRunClusterConfig;
     private final ClusterProcessService clusterProcessService;
+    private final HostPortService hostPortService;
 
     private Map<String, MqttClient> dummyClients;
+
+    private ScheduledExecutorService scheduler;
+
+    @PostConstruct
+    public void init() {
+        scheduler = Executors.newSingleThreadScheduledExecutor(ThingsBoardThreadFactory.forName("dummy-scheduler"));
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                if (CollectionUtils.isEmpty(dummyClients)) {
+                    return;
+                }
+                List<MqttClient> clients = new ArrayList<>(dummyClients.values());
+                MqttClient client = clients.get(ThreadLocalRandom.current().nextInt(clients.size()));
+
+                int action = ThreadLocalRandom.current().nextInt(0, 4);
+
+                String clientId = client.getClientConfig().getClientId();
+                switch (action) {
+                    case 0:
+                        log.trace("Dummy client lifecycle simulation: Disconnect");
+                        if (client.isConnected()) {
+                            log.debug("[{}] Simulating device failure (Disconnect)", clientId);
+                            client.disconnect();
+                        }
+                        break;
+
+                    case 1:
+                        log.trace("Dummy client lifecycle simulation: Connect");
+                        if (!client.isConnected()) {
+                            log.debug("[{}] Simulating device recovery (Connect)", clientId);
+                            client.connect(
+                                    CallbackUtil.createConnectCallback(
+                                            mqttConnectResult -> {
+                                            },
+                                            throwable -> client.disconnectAndClose()),
+                                    hostPortService.getHostPort().getHost());
+                        }
+                        break;
+
+                    case 2:
+                        log.trace("Dummy client lifecycle simulation: Subscribe");
+
+                        if (!client.isConnected()) {
+                            log.debug("[{}] Device waking up for subscription...", clientId);
+                            client.connect(CallbackUtil.createConnectCallback(
+                                            mqttConnectResult -> {
+                                            },
+                                            throwable -> client.disconnectAndClose()),
+                                    hostPortService.getHostPort().getHost());
+                            Thread.sleep(1000);
+                        }
+
+                        if (client.isConnected()) {
+
+                            String topic = TopicDictionary.getRandomTopic(clientId);
+                            int qos = ThreadLocalRandom.current().nextInt(0, 3);
+
+                            log.debug("[{}] Subscribing to: {} (QoS {})", clientId, topic, qos);
+                            client.on(topic,
+                                    (t, payload, receiveTime) -> {
+                                    },
+                                    CallbackUtil.createCallback(() -> {
+                                    }, __ -> {
+                                    }),
+                                    MqttQoS.valueOf(qos));
+                        }
+                        break;
+
+                    case 3:
+                        log.trace("Dummy client lifecycle simulation: Unsubscribe");
+                        HashMultimap<String, MqttSubscription> subscriptions = client.getSubscriptions();
+                        if (subscriptions.isEmpty()) {
+                            return;
+                        }
+                        if (client.isConnected()) {
+                            List<String> activeTopics = new ArrayList<>(subscriptions.keySet());
+                            String topicToUnsubscribe = activeTopics.get(
+                                    ThreadLocalRandom.current().nextInt(activeTopics.size())
+                            );
+                            log.debug("[{}] Unsubscribing from random topic: {}", clientId, topicToUnsubscribe);
+                            client.off(topicToUnsubscribe);
+                        }
+                        break;
+                }
+            } catch (Exception e) {
+                log.error("Error in lifecycle simulation", e);
+            }
+        }, 10, 10, TimeUnit.SECONDS);
+    }
 
     @Override
     public void connectDummyClients() {
@@ -107,6 +207,9 @@ public class DummyClientServiceImpl implements DummyClientService {
     public void destroy() {
         if (dummyClients != null) {
             disconnectDummyClients();
+        }
+        if (scheduler != null) {
+            scheduler.shutdownNow();
         }
     }
 }
