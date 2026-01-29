@@ -64,88 +64,97 @@ public class DummyClientServiceImpl implements DummyClientService {
     @PostConstruct
     public void init() {
         scheduler = Executors.newSingleThreadScheduledExecutor(ThingsBoardThreadFactory.forName("dummy-scheduler"));
+        // Run frequency: Every 2 seconds is enough for 1-minute resolution metrics
         scheduler.scheduleAtFixedRate(() -> {
             try {
                 if (CollectionUtils.isEmpty(dummyClients)) {
                     return;
                 }
+                // 1. Calculate "Global Mood" based on time (Sine Wave)
+                // Cycle duration: ~10 minutes (600,000 ms)
+                // value goes from -1.0 (Worst) to +1.0 (Best)
+                double timeFactor = 2.0 * Math.PI * (System.currentTimeMillis() % 600000) / 600000.0;
+                double mood = Math.sin(timeFactor);
+
+                // 2. Batch size: 3 to 8 clients per tick
+                int batchSize = ThreadLocalRandom.current().nextInt(3, 9);
                 List<MqttClient> clients = new ArrayList<>(dummyClients.values());
-                MqttClient client = clients.get(ThreadLocalRandom.current().nextInt(clients.size()));
 
-                int action = ThreadLocalRandom.current().nextInt(0, 4);
+                for (int i = 0; i < batchSize; i++) {
+                    MqttClient client = clients.get(ThreadLocalRandom.current().nextInt(clients.size()));
+                    String clientId = client.getClientConfig().getClientId();
+                    boolean isConnected = client.isConnected();
 
-                String clientId = client.getClientConfig().getClientId();
-                switch (action) {
-                    case 0:
-                        log.trace("Dummy client lifecycle simulation: Disconnect");
-                        if (client.isConnected()) {
+                    int action = -1; // -1 means do nothing
+
+                    // 3. DECISION LOGIC BASED ON "MOOD"
+                    // If Mood is HIGH (> 0): Prefer Connecting & Subscribing (Growth Phase)
+                    // If Mood is LOW (< 0): Prefer Disconnecting & Unsubscribing (Failure Phase)
+
+                    double roll = ThreadLocalRandom.current().nextDouble(); // 0.0 to 1.0
+
+                    if (isConnected) {
+                        // Actions: 0=Disconnect, 2=Subscribe, 3=Unsubscribe
+                        if (mood < -0.3) {
+                            // "Bad Mood": High chance to Disconnect or Unsubscribe
+                            if (roll < 0.15) action = 0;      // 15% Disconnect
+                            else if (roll < 0.4) action = 3;  // 25% Unsubscribe
+                            else if (roll < 0.5) action = 2;  // 10% Subscribe (still happens occasionally)
+                        } else {
+                            // "Good Mood": Mostly Stable, some Subscribing
+                            if (roll < 0.02) action = 0;      // 2% Disconnect (Accidents happen)
+                            else if (roll < 0.2) action = 2;  // 18% Subscribe
+                            else if (roll < 0.3) action = 3;  // 10% Unsubscribe
+                        }
+                    } else {
+                        // Actions: 1=Connect
+                        if (mood > 0.2) {
+                            // "Good Mood": Aggressive Recovery
+                            if (roll < 0.6) action = 1;       // 60% chance to Reconnect
+                        } else {
+                            // "Bad Mood": Slow Recovery
+                            if (roll < 0.1) action = 1;       // Only 10% chance to Reconnect
+                        }
+                    }
+
+                    // 4. EXECUTE ACTION
+                    switch (action) {
+                        case 0: // DISCONNECT
                             log.debug("[{}] Simulating device failure (Disconnect)", clientId);
                             client.disconnect();
-                        }
-                        break;
+                            break;
 
-                    case 1:
-                        log.trace("Dummy client lifecycle simulation: Connect");
-                        if (!client.isConnected()) {
+                        case 1: // CONNECT
                             log.debug("[{}] Simulating device recovery (Connect)", clientId);
                             client.connect(
-                                    CallbackUtil.createConnectCallback(
-                                            mqttConnectResult -> {
-                                            },
-                                            throwable -> client.disconnectAndClose()),
-                                    hostPortService.getHostPort().getHost());
-                        }
-                        break;
+                                    CallbackUtil.createConnectCallback(res -> {
+                                    }, err -> client.disconnectAndClose()),
+                                    hostPortService.getHostPort().getHost()
+                            );
+                            break;
 
-                    case 2:
-                        log.trace("Dummy client lifecycle simulation: Subscribe");
-
-                        if (!client.isConnected()) {
-                            log.debug("[{}] Device waking up for subscription...", clientId);
-                            client.connect(CallbackUtil.createConnectCallback(
-                                            mqttConnectResult -> {
-                                            },
-                                            throwable -> client.disconnectAndClose()),
-                                    hostPortService.getHostPort().getHost());
-                            Thread.sleep(1000);
-                        }
-
-                        if (client.isConnected()) {
-
+                        case 2: // SUBSCRIBE
                             String topic = TopicDictionary.getRandomTopic(clientId);
                             int qos = ThreadLocalRandom.current().nextInt(0, 3);
+                            client.on(topic, (t, p, time) -> {
+                            }, CallbackUtil.createCallback(() -> {
+                            }, __ -> {
+                            }), MqttQoS.valueOf(qos));
+                            break;
 
-                            log.debug("[{}] Subscribing to: {} (QoS {})", clientId, topic, qos);
-                            client.on(topic,
-                                    (t, payload, receiveTime) -> {
-                                    },
-                                    CallbackUtil.createCallback(() -> {
-                                    }, __ -> {
-                                    }),
-                                    MqttQoS.valueOf(qos));
-                        }
-                        break;
-
-                    case 3:
-                        log.trace("Dummy client lifecycle simulation: Unsubscribe");
-                        HashMultimap<String, MqttSubscription> subscriptions = client.getSubscriptions();
-                        if (subscriptions.isEmpty()) {
-                            return;
-                        }
-                        if (client.isConnected()) {
-                            List<String> activeTopics = new ArrayList<>(subscriptions.keySet());
-                            String topicToUnsubscribe = activeTopics.get(
-                                    ThreadLocalRandom.current().nextInt(activeTopics.size())
-                            );
-                            log.debug("[{}] Unsubscribing from random topic: {}", clientId, topicToUnsubscribe);
-                            client.off(topicToUnsubscribe);
-                        }
-                        break;
+                        case 3: // UNSUBSCRIBE
+                            HashMultimap<String, MqttSubscription> subscriptions = client.getSubscriptions();
+                            if (!subscriptions.isEmpty()) {
+                                List<String> activeTopics = new ArrayList<>(subscriptions.keySet());
+                                client.off(activeTopics.get(ThreadLocalRandom.current().nextInt(activeTopics.size())));
+                            }
+                            break;
+                    }
                 }
             } catch (Exception e) {
                 log.error("Error in lifecycle simulation", e);
             }
-        }, 10, 10, TimeUnit.SECONDS);
+        }, 5000, 2000, TimeUnit.MILLISECONDS); // Run every 2 seconds
     }
 
     @Override
@@ -171,6 +180,16 @@ public class DummyClientServiceImpl implements DummyClientService {
             clientInitializer.connectClient(CallbackUtil.createConnectCallback(connectResult -> {
                         dummyClients.put(clientId, dummyClient);
                         connectionStats.addValue(System.currentTimeMillis() - connectionStart);
+
+                        dummyClient.on(
+                                TopicDictionary.getRandomTopic(clientId),
+                                (topic, payload, receiveTime) -> {
+                                },
+                                CallbackUtil.createCallback(() -> {
+                                }, throwable -> {
+                                })
+                        );
+
                         latch.countDown();
                     }, t -> {
                         log.warn("Failed to connect dummy client {}", clientId);

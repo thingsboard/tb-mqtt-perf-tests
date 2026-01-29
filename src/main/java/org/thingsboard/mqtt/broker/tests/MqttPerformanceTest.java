@@ -119,6 +119,8 @@ public class MqttPerformanceTest {
 
         dummyClientService.connectDummyClients();
 
+        Thread.sleep(2000);
+
         boolean orchestratorNotified = testRestService.notifyNodeIsReady();
         if (orchestratorNotified) {
             clusterSynchronizer.awaitClusterReady();

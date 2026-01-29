@@ -34,7 +34,7 @@
     },
     {
       "id": 2,
-      "subscribers": 50,
+      "subscribers": 10,
       "topicFilter": "flux/void/entropy/#",
       "expectedPublisherGroups": [
         2
@@ -44,7 +44,7 @@
     },
     {
       "id": 3,
-      "subscribers": 10,
+      "subscribers": 5,
       "topicFilter": "matrix/level42/glitch/+",
       "expectedPublisherGroups": [
         3
@@ -53,7 +53,7 @@
       "clientIdPrefix": null
     }
   ],
-  "dummyClients": 500,
+  "dummyClients": 1000,
   "secondsToRun": 60,
   "additionalSecondsToWait": 30,
   "maxMsgsPerPublisherPerSecond": 1,

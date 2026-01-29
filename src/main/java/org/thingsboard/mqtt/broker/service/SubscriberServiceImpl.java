@@ -17,6 +17,7 @@ package org.thingsboard.mqtt.broker.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.buffer.ByteBuf;
+import io.netty.handler.codec.mqtt.MqttQoS;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
@@ -43,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -122,7 +124,7 @@ public class SubscriberServiceImpl implements SubscriberService {
                                 subscriberInfo.getSubscriberGroup().getTopicFilter(),
                                 (topic, mqttMessageByteBuf, receivedTime) -> processReceivedMsg(subscribeStats, subscriberInfo, mqttMessageByteBuf, receivedTime),
                                 CallbackUtil.createCallback(latch::countDown, t -> latch.countDown()),
-                                testRunConfiguration.getSubscriberQoS()));
+                                MqttQoS.valueOf(ThreadLocalRandom.current().nextInt(0, 3))));
     }
 
     private void processReceivedMsg(SubscribeStats subscribeStats, SubscriberInfo subscriberInfo, ByteBuf mqttMessageByteBuf, long receivedTime) {
