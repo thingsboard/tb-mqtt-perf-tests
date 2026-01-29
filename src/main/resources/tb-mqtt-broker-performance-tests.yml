@@ -1,5 +1,5 @@
 #
-# Copyright © 2016-2024 The Thingsboard Authors
+# Copyright © 2016-2026 The Thingsboard Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -79,7 +79,7 @@ test-run:
   # If the configuration file is not set, the default configuration (p2p) will be used.
   # "p2p" or "point-to-point" refers to a 1 publisher to 1 subscriber configuration.
   # Use TEST_RUN_DEFAULT_PUB_SUB_GROUPS_COUNT to define the number of p2p groups.
-  configuration-file: "${TEST_RUN_CONFIGURATION_FILE:}"
+  configuration-file: "${TEST_RUN_CONFIGURATION_FILE:/home/dlandiak/projects/tb-mqtt-perf-tests/src/main/conf/general_use_case.json}"
 
   # Could be ORCHESTRATOR or RUNNER
   orchestrator-url: "${TEST_RUN_TEST_ORCHESTRATOR_URL:}"
