@@ -131,6 +131,9 @@ final class MqttClientImpl implements MqttClient {
     }
 
     private void connect(ConnectCallback connectCallback, String host, int port, boolean reconnect) {
+        // Reset disconnected flag to allow reconnection after manual disconnect
+        this.disconnected = false;
+
         if (this.eventLoop == null) {
             this.eventLoop = new NioEventLoopGroup();
         }

@@ -65,96 +65,114 @@ public class DummyClientServiceImpl implements DummyClientService {
     public void init() {
         scheduler = Executors.newSingleThreadScheduledExecutor(ThingsBoardThreadFactory.forName("dummy-scheduler"));
         // Run frequency: Every 2 seconds is enough for 1-minute resolution metrics
-        scheduler.scheduleAtFixedRate(() -> {
-            try {
-                if (CollectionUtils.isEmpty(dummyClients)) {
-                    return;
-                }
-                // 1. Calculate "Global Mood" based on time (Sine Wave)
-                // Cycle duration: ~10 minutes (600,000 ms)
-                // value goes from -1.0 (Worst) to +1.0 (Best)
-                double timeFactor = 2.0 * Math.PI * (System.currentTimeMillis() % 600000) / 600000.0;
-                double mood = Math.sin(timeFactor);
+        scheduler.scheduleAtFixedRate(this::simulateClientLifecycle, 5000, 2000, TimeUnit.MILLISECONDS);
+    }
 
-                // 2. Batch size: 3 to 8 clients per tick
-                int batchSize = ThreadLocalRandom.current().nextInt(3, 9);
-                List<MqttClient> clients = new ArrayList<>(dummyClients.values());
-
-                for (int i = 0; i < batchSize; i++) {
-                    MqttClient client = clients.get(ThreadLocalRandom.current().nextInt(clients.size()));
-                    String clientId = client.getClientConfig().getClientId();
-                    boolean isConnected = client.isConnected();
-
-                    int action = -1; // -1 means do nothing
-
-                    // 3. DECISION LOGIC BASED ON "MOOD"
-                    // If Mood is HIGH (> 0): Prefer Connecting & Subscribing (Growth Phase)
-                    // If Mood is LOW (< 0): Prefer Disconnecting & Unsubscribing (Failure Phase)
-
-                    double roll = ThreadLocalRandom.current().nextDouble(); // 0.0 to 1.0
-
-                    if (isConnected) {
-                        // Actions: 0=Disconnect, 2=Subscribe, 3=Unsubscribe
-                        if (mood < -0.3) {
-                            // "Bad Mood": High chance to Disconnect or Unsubscribe
-                            if (roll < 0.15) action = 0;      // 15% Disconnect
-                            else if (roll < 0.4) action = 3;  // 25% Unsubscribe
-                            else if (roll < 0.5) action = 2;  // 10% Subscribe (still happens occasionally)
-                        } else {
-                            // "Good Mood": Mostly Stable, some Subscribing
-                            if (roll < 0.02) action = 0;      // 2% Disconnect (Accidents happen)
-                            else if (roll < 0.2) action = 2;  // 18% Subscribe
-                            else if (roll < 0.3) action = 3;  // 10% Unsubscribe
-                        }
-                    } else {
-                        // Actions: 1=Connect
-                        if (mood > 0.2) {
-                            // "Good Mood": Aggressive Recovery
-                            if (roll < 0.6) action = 1;       // 60% chance to Reconnect
-                        } else {
-                            // "Bad Mood": Slow Recovery
-                            if (roll < 0.1) action = 1;       // Only 10% chance to Reconnect
-                        }
-                    }
-
-                    // 4. EXECUTE ACTION
-                    switch (action) {
-                        case 0: // DISCONNECT
-                            log.debug("[{}] Simulating device failure (Disconnect)", clientId);
-                            client.disconnect();
-                            break;
-
-                        case 1: // CONNECT
-                            log.debug("[{}] Simulating device recovery (Connect)", clientId);
-                            client.connect(
-                                    CallbackUtil.createConnectCallback(res -> {
-                                    }, err -> client.disconnectAndClose()),
-                                    hostPortService.getHostPort().getHost()
-                            );
-                            break;
-
-                        case 2: // SUBSCRIBE
-                            String topic = TopicDictionary.getRandomTopic(clientId);
-                            int qos = ThreadLocalRandom.current().nextInt(0, 3);
-                            client.on(topic, (t, p, time) -> {
-                            }, CallbackUtil.createCallback(() -> {
-                            }, __ -> {
-                            }), MqttQoS.valueOf(qos));
-                            break;
-
-                        case 3: // UNSUBSCRIBE
-                            HashMultimap<String, MqttSubscription> subscriptions = client.getSubscriptions();
-                            if (!subscriptions.isEmpty()) {
-                                List<String> activeTopics = new ArrayList<>(subscriptions.keySet());
-                                client.off(activeTopics.get(ThreadLocalRandom.current().nextInt(activeTopics.size())));
-                            }
-                            break;
-                    }
-                }
-            } catch (Exception e) {
-                log.error("Error in lifecycle simulation", e);
+    private void simulateClientLifecycle() {
+        try {
+            if (CollectionUtils.isEmpty(dummyClients)) {
+                return;
             }
-        }, 5000, 2000, TimeUnit.MILLISECONDS); // Run every 2 seconds
+            // 1. Calculate "Global Mood" based on time (Sine Wave)
+            // Cycle duration: ~10 minutes (600,000 ms)
+            // value goes from -1.0 (Worst) to +1.0 (Best)
+            double timeFactor = 2.0 * Math.PI * (System.currentTimeMillis() % 600000) / 600000.0;
+            double mood = Math.sin(timeFactor);
+
+            // 2. Batch size: 3 to 8 clients per tick
+            int batchSize = ThreadLocalRandom.current().nextInt(3, 9);
+            List<MqttClient> clients = new ArrayList<>(dummyClients.values());
+            if (clients.isEmpty()) {
+                return;
+            }
+
+            // Shuffle and take unique clients to avoid conflicting operations on same client
+            java.util.Collections.shuffle(clients);
+            int actualBatchSize = Math.min(batchSize, clients.size());
+
+            for (int i = 0; i < actualBatchSize; i++) {
+                MqttClient client = clients.get(i);
+                String clientId = client.getClientConfig().getClientId();
+                boolean isConnected = client.isConnected();
+
+                int action = -1; // -1 means do nothing
+
+                // 3. DECISION LOGIC BASED ON "MOOD"
+                // If Mood is HIGH (> 0): Prefer Connecting & Subscribing (Growth Phase)
+                // If Mood is LOW (< 0): Prefer Disconnecting & Unsubscribing (Failure Phase)
+
+                double roll = ThreadLocalRandom.current().nextDouble(); // 0.0 to 1.0
+
+                if (isConnected) {
+                    // Actions: 0=Disconnect, 2=Subscribe, 3=Unsubscribe
+                    if (mood < -0.3) {
+                        // "Bad Mood": High chance to Disconnect or Unsubscribe
+                        if (roll < 0.15) action = 0;      // 15% Disconnect
+                        else if (roll < 0.4) action = 3;  // 25% Unsubscribe
+                        else if (roll < 0.5) action = 2;  // 10% Subscribe (still happens occasionally)
+                    } else {
+                        // "Good Mood": Mostly Stable, some Subscribing
+                        if (roll < 0.02) action = 0;      // 2% Disconnect (Accidents happen)
+                        else if (roll < 0.2) action = 2;  // 18% Subscribe
+                        else if (roll < 0.3) action = 3;  // 10% Unsubscribe
+                    }
+                } else {
+                    // Actions: 1=Connect
+                    if (mood > 0.2) {
+                        // "Good Mood": Aggressive Recovery
+                        if (roll < 0.6) action = 1;       // 60% chance to Reconnect
+                    } else {
+                        // "Bad Mood": Slow Recovery
+                        if (roll < 0.1) action = 1;       // Only 10% chance to Reconnect
+                    }
+                }
+
+                // 4. EXECUTE ACTION
+                executeAction(action, client, clientId);
+            }
+        } catch (Exception e) {
+            log.error("Error in lifecycle simulation", e);
+        }
+    }
+
+    private void executeAction(int action, MqttClient client, String clientId) {
+        switch (action) {
+            case 0: // DISCONNECT
+                log.info("[{}] Simulating device failure (Disconnect)", clientId);
+                client.disconnect();
+                break;
+
+            case 1: // CONNECT (Reconnect)
+                log.info("[{}] Simulating device recovery (Reconnect)", clientId);
+                client.reconnect(
+                        CallbackUtil.createConnectCallback(
+                                res -> log.debug("[{}] Reconnected successfully", clientId),
+                                err -> log.warn("[{}] Failed to reconnect: {}", clientId, err.getMessage())
+                        )
+                );
+                break;
+
+            case 2: // SUBSCRIBE
+                String topic = TopicDictionary.getRandomTopic(clientId);
+                int qos = ThreadLocalRandom.current().nextInt(0, 3);
+                log.debug("[{}] Subscribing to topic: {} with QoS: {}", clientId, topic, qos);
+                client.on(topic, (t, p, time) -> {
+                }, CallbackUtil.createCallback(
+                        () -> log.debug("[{}] Subscribed to {}", clientId, topic),
+                        err -> log.warn("[{}] Failed to subscribe to {}: {}", clientId, topic, err.getMessage())
+                ), MqttQoS.valueOf(qos));
+                break;
+
+            case 3: // UNSUBSCRIBE
+                HashMultimap<String, MqttSubscription> subscriptions = client.getSubscriptions();
+                if (!subscriptions.isEmpty()) {
+                    List<String> activeTopics = new ArrayList<>(subscriptions.keySet());
+                    String topicToUnsub = activeTopics.get(ThreadLocalRandom.current().nextInt(activeTopics.size()));
+                    log.debug("[{}] Unsubscribing from topic: {}", clientId, topicToUnsub);
+                    client.off(topicToUnsub);
+                }
+                break;
+        }
     }
 
     @Override

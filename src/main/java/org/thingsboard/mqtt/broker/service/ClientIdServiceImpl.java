@@ -26,19 +26,19 @@ public class ClientIdServiceImpl implements ClientIdService {
 
     @Override
     public String createSubscriberClientId(SubscriberGroup subscriberGroup, int subscriberId) {
-        return ClientIdDictionary.generateRandomClientId();
+        return ClientIdDictionary.generateRandomClientId() + "-" + subscriberId;
 //        return subscriberGroup.getClientIdPrefix() + subscriberId;
     }
 
     @Override
     public String createPublisherClientId(PublisherGroup publisherGroup, int publisherId) {
-        return ClientIdDictionary.generateRandomClientId();
+        return ClientIdDictionary.generateRandomClientId() + "-" + publisherId;
 //        return publisherGroup.getClientIdPrefix() + publisherId;
     }
 
     @Override
     public String createDummyClientId(int dummyId) {
-        return ClientIdDictionary.generateRandomClientId();
+        return ClientIdDictionary.generateRandomClientId() + "-" + dummyId;
 //        return  "test_dummy_client_" + dummyId;
     }
 }
