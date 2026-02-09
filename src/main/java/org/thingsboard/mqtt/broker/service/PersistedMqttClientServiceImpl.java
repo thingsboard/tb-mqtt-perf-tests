@@ -71,9 +71,12 @@ public class PersistedMqttClientServiceImpl implements PersistedMqttClientServic
             String clientId = clientIdService.createSubscriberClientId(preConnectedSubscriberInfo.getSubscriberGroup(), preConnectedSubscriberInfo.getSubscriberIndex());
             ShortMqttClientCredentials credentials = findCredentialsByClientId(allClientCredentials, clientId);
             if (credentials == null) {
-                tbBrokerRestService.createClientCredentials(
-                        new MqttClientCredentialsDto(clientId, clientId, PersistentClientType.APPLICATION, ClientCredentialsType.MQTT_BASIC)
-                );
+                try {
+                    tbBrokerRestService.createClientCredentials(
+                            new MqttClientCredentialsDto(clientId, clientId, PersistentClientType.APPLICATION, ClientCredentialsType.MQTT_BASIC)
+                    );
+                } catch (Exception ignored) {
+                }
             } else if (credentials.getClientType() == PersistentClientType.DEVICE) {
                 log.error("Client with ID {} exists with {} client type.", credentials, PersistentClientType.DEVICE);
                 throw new RuntimeException("Client with ID " + clientId + " exists with " + PersistentClientType.DEVICE + " type");
