@@ -17,5 +17,6 @@ package org.thingsboard.mqtt.broker.data;
 
 public enum ClientCredentialsType {
     MQTT_BASIC,
-    SSL
+    X_509,
+    SCRAM
 }
