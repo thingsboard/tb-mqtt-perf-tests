@@ -32,6 +32,7 @@ import org.thingsboard.mqtt.broker.client.mqtt.MqttClientConfig;
 import org.thingsboard.mqtt.broker.client.mqtt.MqttHandler;
 import org.thingsboard.mqtt.broker.client.mqtt.ReceivedMsgProcessor;
 import org.thingsboard.mqtt.broker.data.dto.HostPortDto;
+import org.thingsboard.mqtt.broker.tests.MqttPerformanceTest;
 import org.thingsboard.mqtt.broker.util.ThingsBoardThreadFactory;
 
 import java.util.Arrays;
@@ -81,7 +82,8 @@ public class ClientInitializerImpl implements ClientInitializer {
     public MqttClient createClient(String clientId, String userName, boolean cleanSession, MqttHandler defaultHandler) {
         MqttClientConfig config = new MqttClientConfig(sslConfig.getSslContext());
         config.setClientId(clientId);
-        config.setUsername(userName);
+        config.setUsername(MqttPerformanceTest.DEFAULT_USER_NAME);
+        config.setPassword(MqttPerformanceTest.DEFAULT_PASSWORD);
         config.setCleanSession(cleanSession);
         config.setProtocolVersion(MqttVersion.MQTT_5);
         config.setTimeoutSeconds(keepAliveSeconds);

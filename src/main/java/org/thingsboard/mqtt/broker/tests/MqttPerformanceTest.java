@@ -58,7 +58,8 @@ import java.util.concurrent.TimeUnit;
 public class MqttPerformanceTest {
 
     private static final ObjectMapper mapper = new ObjectMapper();
-    public static final String DEFAULT_USER_NAME = "default";
+    public static final String DEFAULT_USER_NAME = "tbmq";
+    public static final String DEFAULT_PASSWORD = "tbmq";
 
     private final DummyClientService dummyClientService;
     private final SubscriberService subscriberService;
@@ -103,13 +104,13 @@ public class MqttPerformanceTest {
 
         printTestRunConfiguration();
 
-        final UUID defaultCredentialsId = createDefaultMqttCredentials();
+//        final UUID defaultCredentialsId = createDefaultMqttCredentials();
 
         log.info("Start clear persisted Sessions.");
-        persistedMqttClientService.clearPersistedSessions();
-        persistedMqttClientService.removeApplicationClients();
+//        persistedMqttClientService.clearPersistedSessions();
+//        persistedMqttClientService.removeApplicationClients();
         Thread.sleep(2000);
-        persistedMqttClientService.initApplicationClients();
+//        persistedMqttClientService.initApplicationClients();
 
         SubscribeStats subscribeStats = new SubscribeStats(new DescriptiveStatistics(), new DescriptiveStatistics());
 
@@ -151,7 +152,7 @@ public class MqttPerformanceTest {
         // wait for all MQTT clients to close
         Thread.sleep(waitTimeAfterDisconnectsMs);
 
-        persistedMqttClientService.clearPersistedSessions();
+//        persistedMqttClientService.clearPersistedSessions();
 
         SubscriberAnalysisResult analysisResult = subscriberService.analyzeReceivedMessages();
         log.info("Messages stats: lost messages - {}, duplicated messages - {}.",
@@ -166,7 +167,7 @@ public class MqttPerformanceTest {
         Thread.sleep(waitTimeClientsClosedMs);
         persistedMqttClientService.removeApplicationClients();
 
-        removeDefaultCredentials(defaultCredentialsId);
+//        removeDefaultCredentials(defaultCredentialsId);
 
         log.info("Performance test finished.");
     }
