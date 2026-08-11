@@ -16,6 +16,7 @@
 package org.thingsboard.mqtt.broker.tests;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.netty.handler.codec.mqtt.MqttQoS;
 import io.netty.util.ResourceLeakDetector;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -166,6 +167,15 @@ public class MqttPerformanceTest {
         log.info("Messages stats: lost messages - {}, duplicated messages - {}.",
                 analysisResult.getLostMessages(), analysisResult.getDuplicatedMessages()
         );
+        // Stop the interval printer before reading the final counts. It clears the very stats it prints, so
+        // leaving it running would race the accumulation below and could count the last interval twice.
+        // shutdown() rather than shutdownNow(): an interrupt between its addAndGet and its clear would
+        // leave those values in place for the main thread to add a second time.
+        latencyScheduler.shutdown();
+        if (!latencyScheduler.awaitTermination(period, TimeUnit.SECONDS)) {
+            log.warn("Interval latency printer did not stop in time, run totals may be inexact.");
+        }
+
         printLatencyStats(generalLatencyStats, msgProcessingLatencyStats, acknowledgedStats, sentStats);
 
         totalReceived.addAndGet(generalLatencyStats.getN());
@@ -203,16 +213,31 @@ public class MqttPerformanceTest {
     }
 
     private void printRunTotals(long sent, long acknowledged, long received, long quotaExceeded, long refused) {
-        long accepted = sent - quotaExceeded - refused;
-        // Only accepted publishes can be fanned out, so they - not the sent count - are the denominator
-        // for judging delivery. Anything refused with 0x97 never entered the broker's pipeline.
-        long fanOut = sent > 0 ? subscriberService.calculateTotalExpectedReceivedMessages() / sent : 0;
-        long expectedForAccepted = accepted * fanOut;
+        int expectedForAllSent = subscriberService.calculateTotalExpectedReceivedMessages();
+        if (MqttQoS.AT_MOST_ONCE == testRunConfiguration.getPublisherQoS()) {
+            // A QoS 0 publish is never acknowledged, so the broker never reports what it accepted or refused.
+            // Claiming an acceptance count here would be a guess, so report only what was actually observed.
+            log.info("Run totals: publish sent - {}, received messages - {}, expected received for all sent - {}, " +
+                            "undelivered - {}. Acceptance is unknown at QoS 0, the broker sends no PUBACK.",
+                    sent, received, expectedForAllSent, expectedForAllSent - received
+            );
+            return;
+        }
+        // Acknowledged is the accepted count measured directly: after the reason-code fix a PUBACK only
+        // reaches onSuccess when the broker took the message. Publishes with no response at all - still in
+        // flight when the publishers disconnected - are reported separately instead of being folded into
+        // either bucket.
+        long unanswered = sent - acknowledged - quotaExceeded - refused;
+        // Only accepted publishes can be fanned out, so they - not the sent count - are the denominator for
+        // judging delivery. Scale the configured expectation by the accepted fraction, doing the division
+        // last: a per-message fan-out would truncate, and no single fan-out figure exists once subscriber
+        // groups have different topic filters.
+        long expectedForAccepted = sent > 0 ? (long) expectedForAllSent * acknowledged / sent : 0;
         log.info("Run totals: publish sent - {}, accepted by broker - {}, refused with 0x97 QUOTA_EXCEEDED - {}, " +
-                        "refused with other reason codes - {}, acknowledged (accepted only) - {}, " +
-                        "received messages - {}, expected received for accepted publishes - {} (fan-out {}), undelivered - {}.",
-                sent, accepted, quotaExceeded, refused, acknowledged,
-                received, expectedForAccepted, fanOut, expectedForAccepted - received
+                        "refused with other reason codes - {}, sent but never answered - {}, " +
+                        "received messages - {}, expected received for accepted publishes - {}, undelivered - {}.",
+                sent, acknowledged, quotaExceeded, refused, unanswered,
+                received, expectedForAccepted, expectedForAccepted - received
         );
     }
 
