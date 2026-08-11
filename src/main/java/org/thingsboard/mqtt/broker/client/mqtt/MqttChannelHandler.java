@@ -265,6 +265,13 @@ final class MqttChannelHandler extends SimpleChannelInboundHandler<MqttMessage> 
         MqttPubReplyMessageVariableHeader variableHeader = (MqttPubReplyMessageVariableHeader) message.variableHeader();
         int messageId = variableHeader.messageId();
         MqttPendingPublish pendingPublish = this.client.getPendingPublishes().get(messageId);
+        if (pendingPublish == null) {
+            // Nothing is pending under this packet id: a duplicate PUBREC, or one for a publish already
+            // failed and removed. Dereferencing it threw from the event loop, taking down the channel and
+            // with it every publish still in flight on that connection.
+            log.debug("[{}] Received PUBREC for unknown message id {}.", this.client.getClientConfig().getClientId(), messageId);
+            return;
+        }
         pendingPublish.onPubackReceived();
 
         if (isFailure(variableHeader.reasonCode())) {
@@ -295,6 +302,10 @@ final class MqttChannelHandler extends SimpleChannelInboundHandler<MqttMessage> 
     private void handlePubcomp(MqttMessage message) {
         MqttMessageIdVariableHeader variableHeader = (MqttMessageIdVariableHeader) message.variableHeader();
         MqttPendingPublish pendingPublish = this.client.getPendingPublishes().get(variableHeader.messageId());
+        if (pendingPublish == null) {
+            log.debug("[{}] Received PUBCOMP for unknown message id {}.", this.client.getClientConfig().getClientId(), variableHeader.messageId());
+            return;
+        }
         pendingPublish.getCallback().onSuccess();
         this.client.getPendingPublishes().remove(variableHeader.messageId());
         pendingPublish.onPubcompReceived();
