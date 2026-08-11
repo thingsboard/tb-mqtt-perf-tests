@@ -19,9 +19,20 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 @Getter
 @AllArgsConstructor
 public class PublishStats {
     private final DescriptiveStatistics publishSentLatencyStats;
     private final DescriptiveStatistics publishAcknowledgedStats;
+    /**
+     * Publishes the broker refused with 0x97 QUOTA_EXCEEDED. These are acknowledged but NOT accepted,
+     * so they are excluded from {@link #publishAcknowledgedStats}. Cumulative for the whole run.
+     */
+    private final AtomicLong quotaExceededPublishes;
+    /**
+     * Publishes the broker refused with any other MQTT 5 error reason code. Cumulative for the whole run.
+     */
+    private final AtomicLong refusedPublishes;
 }

@@ -32,6 +32,7 @@ import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 import org.thingsboard.mqtt.broker.client.mqtt.MqttClient;
+import org.thingsboard.mqtt.broker.client.mqtt.MqttPubAckFailureException;
 import org.thingsboard.mqtt.broker.config.TestRunClusterConfig;
 import org.thingsboard.mqtt.broker.config.TestRunConfiguration;
 import org.thingsboard.mqtt.broker.data.Message;
@@ -71,6 +72,11 @@ public class PublisherServiceImpl implements PublisherService {
 
     private final Map<String, PublisherInfo> publisherInfos = new ConcurrentHashMap<>();
     private final ScheduledExecutorService publishScheduler = Executors.newSingleThreadScheduledExecutor(ThingsBoardThreadFactory.forName("publish-scheduler"));
+
+    // A refused publish is acknowledged but not accepted, so it must not be counted as a successful ack.
+    // Cumulative for the whole run, unlike the interval latency stats.
+    private final AtomicLong quotaExceededPublishes = new AtomicLong();
+    private final AtomicLong refusedPublishes = new AtomicLong();
 
     @Value("${test-run.publisher-warmup-count:0}")
     private int publisherWarmUpCount;
@@ -204,7 +210,23 @@ public class PublisherServiceImpl implements PublisherService {
                 process(publishSentLatencyStats, publishAcknowledgedStats, publisherInfoIterator.next());
             }
         }, 0, shortenedPublishPeriodMs, TimeUnit.MILLISECONDS);
-        return new PublishStats(publishSentLatencyStats, publishAcknowledgedStats);
+        return new PublishStats(publishSentLatencyStats, publishAcknowledgedStats, quotaExceededPublishes, refusedPublishes);
+    }
+
+    private void onPublishFailure(PublisherInfo publisherInfo, Throwable t) {
+        if (t instanceof MqttPubAckFailureException ackFailure) {
+            // Expected under a broker-side quota, and potentially very frequent: count it, do not log per message.
+            if (ackFailure.isQuotaExceeded()) {
+                quotaExceededPublishes.incrementAndGet();
+            } else {
+                refusedPublishes.incrementAndGet();
+            }
+            if (log.isDebugEnabled()) {
+                log.debug("[{}] Publish refused by the broker: {}", publisherInfo.getClientId(), ackFailure.getMessage());
+            }
+            return;
+        }
+        log.error("[{}] Failed to send msg.", publisherInfo.getClientId(), t);
     }
 
     private void process(DescriptiveStatistics publishSentLatencyStats, DescriptiveStatistics publishAcknowledgedStats, PublisherInfo publisherInfo) {
@@ -224,7 +246,7 @@ public class PublisherServiceImpl implements PublisherService {
                                     log.debug("[{}] Acknowledged msg with time {}", publisherInfo.getClientId(), message.getCreateTime());
                                 }
                             },
-                            t -> log.error("[{}] Failed to send msg.", publisherInfo.getClientId(), t)
+                            t -> onPublishFailure(publisherInfo, t)
                     ),
                     testRunConfiguration.getPublisherQoS());
             publishSentFuture

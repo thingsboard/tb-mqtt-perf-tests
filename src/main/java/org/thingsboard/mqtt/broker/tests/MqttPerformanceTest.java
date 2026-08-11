@@ -51,6 +51,7 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Component
 @Slf4j
@@ -137,8 +138,16 @@ public class MqttPerformanceTest {
         DescriptiveStatistics acknowledgedStats = publishStats.getPublishAcknowledgedStats();
         DescriptiveStatistics sentStats = publishStats.getPublishSentLatencyStats();
 
+        // The interval stats are cleared after every print, so accumulate the counts here to keep run totals.
+        AtomicLong totalReceived = new AtomicLong();
+        AtomicLong totalSent = new AtomicLong();
+        AtomicLong totalAcknowledged = new AtomicLong();
+
         latencyScheduler.scheduleAtFixedRate(() -> {
             printLatencyStats(generalLatencyStats, msgProcessingLatencyStats, acknowledgedStats, sentStats);
+            totalReceived.addAndGet(generalLatencyStats.getN());
+            totalSent.addAndGet(sentStats.getN());
+            totalAcknowledged.addAndGet(acknowledgedStats.getN());
             clearStats(generalLatencyStats, msgProcessingLatencyStats, acknowledgedStats, sentStats);
         }, period, period, TimeUnit.SECONDS);
 
@@ -158,6 +167,12 @@ public class MqttPerformanceTest {
                 analysisResult.getLostMessages(), analysisResult.getDuplicatedMessages()
         );
         printLatencyStats(generalLatencyStats, msgProcessingLatencyStats, acknowledgedStats, sentStats);
+
+        totalReceived.addAndGet(generalLatencyStats.getN());
+        totalSent.addAndGet(sentStats.getN());
+        totalAcknowledged.addAndGet(acknowledgedStats.getN());
+        printRunTotals(totalSent.get(), totalAcknowledged.get(), totalReceived.get(),
+                publishStats.getQuotaExceededPublishes().get(), publishStats.getRefusedPublishes().get());
 
         publisherService.printDebugPublishersStats();
         subscriberService.printDebugSubscribersStats();
@@ -184,6 +199,20 @@ public class MqttPerformanceTest {
                 sentStats.getN(), sentStats.getMean(), sentStats.getMax(),
                 acknowledgedStats.getN(), acknowledgedStats.getPercentile(50), acknowledgedStats.getMean(), acknowledgedStats.getMax(),
                 acknowledgedStats.getPercentile(95), msgProcessingLatencyStats.getMax()
+        );
+    }
+
+    private void printRunTotals(long sent, long acknowledged, long received, long quotaExceeded, long refused) {
+        long accepted = sent - quotaExceeded - refused;
+        // Only accepted publishes can be fanned out, so they - not the sent count - are the denominator
+        // for judging delivery. Anything refused with 0x97 never entered the broker's pipeline.
+        long fanOut = sent > 0 ? subscriberService.calculateTotalExpectedReceivedMessages() / sent : 0;
+        long expectedForAccepted = accepted * fanOut;
+        log.info("Run totals: publish sent - {}, accepted by broker - {}, refused with 0x97 QUOTA_EXCEEDED - {}, " +
+                        "refused with other reason codes - {}, acknowledged (accepted only) - {}, " +
+                        "received messages - {}, expected received for accepted publishes - {} (fan-out {}), undelivered - {}.",
+                sent, accepted, quotaExceeded, refused, acknowledged,
+                received, expectedForAccepted, fanOut, expectedForAccepted - received
         );
     }
 
