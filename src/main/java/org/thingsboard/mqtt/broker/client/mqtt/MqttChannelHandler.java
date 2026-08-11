@@ -32,7 +32,6 @@ import io.netty.handler.codec.mqtt.MqttPubAckMessage;
 import io.netty.handler.codec.mqtt.MqttPubReplyMessageVariableHeader;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import io.netty.handler.codec.mqtt.MqttQoS;
-import io.netty.handler.codec.mqtt.MqttReasonCodes;
 import io.netty.handler.codec.mqtt.MqttSubAckMessage;
 import io.netty.handler.codec.mqtt.MqttUnsubAckMessage;
 import io.netty.util.CharsetUtil;
@@ -238,8 +237,28 @@ final class MqttChannelHandler extends SimpleChannelInboundHandler<MqttMessage> 
         if (pendingPublish == null) {
             return;
         }
-        pendingPublish.getCallback().onSuccess();
+        // MQTT 5 marks a refused publish with a reason code of 0x80 or above (e.g. 0x97 QUOTA_EXCEEDED).
+        // Treating those as successful acknowledgements would count messages the broker never accepted.
+        byte reasonCode = extractReasonCode(message);
+        if (isFailure(reasonCode)) {
+            pendingPublish.getCallback().onFailure(new MqttPubAckFailureException("PUBACK", reasonCode));
+        } else {
+            pendingPublish.getCallback().onSuccess();
+        }
         pendingPublish.onPubackReceived();
+    }
+
+    private static byte extractReasonCode(MqttMessage message) {
+        // Netty only produces a reply variable header carrying a reason code for MQTT 5;
+        // for 3.1.1 there is none, which is equivalent to success.
+        return message.variableHeader() instanceof MqttPubReplyMessageVariableHeader replyHeader
+                ? replyHeader.reasonCode()
+                : (byte) 0x00;
+    }
+
+    private static boolean isFailure(byte reasonCode) {
+        // unsigned comparison: 0x00 SUCCESS and 0x10 NO_MATCHING_SUBSCRIBERS are both successes
+        return (reasonCode & 0xFF) >= 0x80;
     }
 
     private void handlePubrec(Channel channel, MqttMessage message) {
@@ -248,8 +267,8 @@ final class MqttChannelHandler extends SimpleChannelInboundHandler<MqttMessage> 
         MqttPendingPublish pendingPublish = this.client.getPendingPublishes().get(messageId);
         pendingPublish.onPubackReceived();
 
-        if (variableHeader.reasonCode() == MqttReasonCodes.PubRec.QUOTA_EXCEEDED.byteValue()) {
-            pendingPublish.getCallback().onFailure(new RuntimeException("rate limits detected"));
+        if (isFailure(variableHeader.reasonCode())) {
+            pendingPublish.getCallback().onFailure(new MqttPubAckFailureException("PUBREC", variableHeader.reasonCode()));
             this.client.getPendingPublishes().remove(messageId);
             return;
         }
