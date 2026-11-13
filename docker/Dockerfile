@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-FROM thingsboard/openjdk17:bullseye-slim
+FROM thingsboard/openjdk25:trixie-slim
 
 COPY start-tb-mqtt-broker-performance-tests.sh ${pkg.name}.deb /tmp/
 
