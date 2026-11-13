@@ -19,9 +19,9 @@ import io.netty.channel.Channel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.mqtt.MqttVersion;
 import io.netty.handler.ssl.SslContext;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.util.Random;
 
 @SuppressWarnings({"WeakerAccess", "unused"})
@@ -59,7 +59,7 @@ public final class MqttClientConfig {
         this.randomClientId = id;
     }
 
-    @Nonnull
+    @NonNull
     public String getClientId() {
         return clientId;
     }
