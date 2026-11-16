@@ -51,7 +51,7 @@
         <dockerfile.skip>true</dockerfile.skip>
         <docker.name>tbmq-performance-tests</docker.name>
         <pkg.implementationTitle>ThingsBoard MQTT Broker Performance Tests</pkg.implementationTitle>
-        <pkg.mainClass>org.thingsboard.mqtt.broker.tools.PerformanceTestsApplication</pkg.mainClass>
+        <pkg.mainClass>org.thingsboard.mqtt.broker.TestsApplication</pkg.mainClass>
         <docker.push-arm-amd-image.phase>pre-integration-test</docker.push-arm-amd-image.phase>
     </properties>
 
