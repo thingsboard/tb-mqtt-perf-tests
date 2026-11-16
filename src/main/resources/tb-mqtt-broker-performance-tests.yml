@@ -76,10 +76,15 @@ test-run:
     min-payload-size: "${TEST_RUN_DEFAULT_MIN_PAYLOAD_SIZE:256}"
     max-concurrent-operations: "${TEST_RUN_DEFAULT_MAX_CONCURRENT_OPERATIONS:1000}"
 
+  receive:
+    threads: "${TEST_RUN_RECEIVE_THREADS:0}" # 0 means the number of available processors
+
   # If the configuration file is not set, the default configuration (p2p) will be used.
   # "p2p" or "point-to-point" refers to a 1 publisher to 1 subscriber configuration.
   # Use TEST_RUN_DEFAULT_PUB_SUB_GROUPS_COUNT to define the number of p2p groups.
   configuration-file: "${TEST_RUN_CONFIGURATION_FILE:}"
+  # Empty runs the configuration file as written; DEVICE or APPLICATION sets the client type of every persistent subscriber group in it
+  persistent-client-type: "${TEST_RUN_PERSISTENT_CLIENT_TYPE:}"
 
   # Could be ORCHESTRATOR or RUNNER
   orchestrator-url: "${TEST_RUN_TEST_ORCHESTRATOR_URL:}"
