@@ -1,42 +1,159 @@
-# performance-tests
+# TBMQ performance tests
 
-ThingsBoard MQTT Broker performance tests.
+A load generator for [TBMQ](https://github.com/thingsboard/tbmq), the ThingsBoard MQTT broker. It connects many MQTT 5
+publishers, subscribers and idle ("dummy") clients to the broker. Publishers send messages at a fixed rate for a fixed
+time, and the tool measures what the subscribers receive.
 
-Project that is able to stress test ThingsBoard MQTT broker with a huge number of MQTT messages published simultaneously
-from different clients.
+The run log reports:
 
-## Prerequisites
+* **Latency:** end-to-end latency (publish to receive) and publish-acknowledge latency. Each is given as median, average,
+  max, 95th and 99th percentile, every `STATS_PERIOD_SECS` seconds and at the end of the run.
+* **Run totals:** publishes sent, accepted and refused by the broker, messages received, and messages undelivered.
+* **Message stats:** lost and duplicated messages, counted per subscriber against what it should have received.
 
-- [Install Docker CE](https://docs.docker.com/engine/installation/)
-- [Install kubectl](https://kubernetes.io/docs/tasks/tools/)
+## Requirements
 
-## Running
+* JDK 25 and Maven, to build.
+* A running TBMQ whose REST API is reachable (`TB_URI`, port 8083 by default) with a system administrator login. The
+  tool does not start without it.
+* Docker, to build the image, and kubectl, for runs spread over several nodes.
 
-See [k8s](/k8s/README.md) README for more details.
+## Build
 
-Main configuration parameters:
+```bash
+mvn clean install                               # runs the unit tests; add -DskipTests to skip them
+mvn clean install -Ddockerfile.skip=false       # also builds the image thingsboard/tbmq-performance-tests
+```
 
-* HTTP_BIND_PORT - port of the server. Default: 8088
-* MQTT_HOST - URL of the ThingsBoard MQTT broker. Default: localhost
-* MQTT_PORT - port of the ThingsBoard MQTT broker. Default: 1883
-* TB_URI - URI of the ThingsBoard MQTT broker. Default: http://localhost:8083
-* TB_ADMIN_USERNAME - ThingsBoard MQTT broker username. Default: sysadmin@thingsboard.org
-* TB_ADMIN_PASSWORD - ThingsBoard MQTT broker password. Default: sysadmin
-* ORCHESTRATION_NODE - if run service as orchestrator(node that orchestrate the cluster of runners) or runner(node that
-  creates clients and publish messages, etc.). Values: true/false
-* TEST_RUN_TEST_ORCHESTRATOR_URL - orchestrator node URL
-* TEST_RUN_TEST_NODE_URL - runner node URL
-* TEST_RUN_CONFIGURATION_FILE - path to performance test configuration file
-* TEST_RUN_PERSISTENT_CLIENT_TYPE - DEVICE or APPLICATION: run every persistent subscriber group of the configuration file
-  with this client type (e.g. the DEVICE-only variant of a scenario). Default: empty, as in the file
-* TEST_RUN_SEQUENTIAL_NUMBER - sequential number of runner nodes
-* TEST_RUN_PARALLEL_TESTS_COUNT - how many test nodes (runners) will be launched
-* TEST_RUN_TOTAL_TESTS_COUNT - sum of test nodes when subscribers and publishers are separated
-* TEST_RUN_MAX_CLUSTER_WAIT_TIME_SECONDS - max time in seconds to wait in runners and orchestrator for others to be
-  ready
-* TEST_RUN_CLUSTER_PROCESS_WAIT_TIME_SECONDS - max time in seconds to wait for clients to connect/subscribe to topics
-* TEST_RUN_CLEAR_PERSISTED_SESSIONS_WAIT_TIME_SECONDS - max time in seconds to wait to clear persisted sessions
-* TEST_RUN_WAIT_TIME_MS_AFTER_CLIENTS_DISCONNECT - time in milliseconds to sleep after the clients started disconnecting
-* TEST_RUN_MAX_TOTAL_CLIENTS_PER_ITERATION - max number out of all publishers that will be used per publishing iteration
-* TEST_RUN_RECEIVE_THREADS - number of threads that process received messages (messages of one subscriber are always
-  processed by the same thread, in order). Default: 0, which means the number of available processors
+The runnable jar is `target/tb-mqtt-broker-performance-tests-<version>-boot.jar`.
+
+## Run on one machine
+
+```bash
+TEST_RUN_CONFIGURATION_FILE=src/main/conf/simple_use_case.json \
+MQTT_HOST=localhost MQTT_PORT=1883 TB_URI=http://localhost:8083 \
+java -Xms2g -Xmx6g -jar target/tb-mqtt-broker-performance-tests-*-boot.jar
+```
+
+The process exits when the run is finished. A run goes like this:
+
+1. **Credentials.** The tool logs in to the REST API and creates MQTT basic credentials with user name `default`, which
+   every client connects with. It also creates credentials for each APPLICATION subscriber.
+2. **Cleanup.** It removes the persistent sessions left by an earlier run of the same scenario.
+3. **Connect and warm up.** It connects and subscribes the subscribers, then connects the publishers and the dummy
+   clients. Every publisher sends a few warm-up messages.
+4. **Publish.** Publishers send for `secondsToRun` seconds at `maxMsgsPerPublisherPerSecond` each. The tool then waits
+   `additionalSecondsToWait` seconds for the last messages.
+5. **Report.** It disconnects every client, prints the results and removes the credentials it created.
+
+Without `TEST_RUN_CONFIGURATION_FILE`, the tool runs a built-in point-to-point scenario. It has
+`TEST_RUN_DEFAULT_PUB_SUB_GROUPS_COUNT` pairs (100 by default) of one publisher and one persistent DEVICE subscriber,
+with QoS 0, 1 msg/s and a 30-second run. The `TEST_RUN_DEFAULT_*` variables in
+[tb-mqtt-broker-performance-tests.yml](src/main/resources/tb-mqtt-broker-performance-tests.yml) change these values.
+
+## Run on several nodes (Kubernetes)
+
+One orchestrator (`ORCHESTRATION_NODE=true`) coordinates several runners, and each runner creates its share of the
+clients. See the [k8s README](k8s/README.md).
+
+## Scenarios
+
+The scenario files are in [src/main/conf](src/main/conf). Each file holds its own client counts, rates, QoS and run
+length; the list below describes their shape.
+
+* `simple_use_case.json` - publisher groups on separate topics, each read by one APPLICATION subscriber. The file also
+  has empty groups (0 publishers, 0 subscribers) that you can turn on.
+* `general_use_case.json` - a mixed load: non-persistent, APPLICATION and DEVICE subscribers on single-level (`+`) and
+  multi-level (`#`) wildcard filters that overlap, plus idle dummy clients.
+* `fan_in_use_case.json` - large publisher groups, each read by one APPLICATION subscriber.
+* `fan_out_use_case.json` - a few publishers whose messages every one of many non-persistent subscribers receives.
+* `capacity_use_case.json` - publisher groups each read by one persistent DEVICE subscriber, so every message goes
+  through the broker's persistent store. The file is generated by
+  [scripts/gen_capacity_scenario.py](scripts/gen_capacity_scenario.py), and its sizes are the constants at the top of
+  that script.
+
+To run a scenario with DEVICE clients in place of APPLICATION clients, set `TEST_RUN_PERSISTENT_CLIENT_TYPE=DEVICE`. The
+same variable set to `APPLICATION` does the opposite.
+
+### Scenario file format
+
+* `publisherGroups` - list of publisher groups
+  * `id` - identifier of the group
+  * `publishers` - number of publishers in the group
+  * `topicPrefix` - topic prefix the group's publishers send to; each publisher appends its own suffix
+  * `clientIdPrefix` - client id prefix for the group's clients (optional)
+* `subscriberGroups` - list of subscriber groups
+  * `id` - identifier of the group
+  * `subscribers` - number of subscribers in the group
+  * `topicFilter` - topic filter the group's subscribers subscribe to
+  * `expectedPublisherGroups` - ids of the publisher groups whose messages the group should receive
+  * `persistentSessionInfo` - `null` for a non-persistent session, or `{"clientType": "APPLICATION"}` /
+    `{"clientType": "DEVICE"}` for a persistent one
+  * `clientIdPrefix` - client id prefix for the group's clients (optional)
+* `dummyClients` - number of clients that only connect and stay idle
+* `secondsToRun` - how long publishers send messages, in seconds
+* `additionalSecondsToWait` - how long to wait after publishing ends, in seconds
+* `maxMsgsPerPublisherPerSecond` - messages per publisher per second; decimals such as 1.1 are accepted
+* `publisherQosValue` - QoS of the publishes
+* `subscriberQosValue` - QoS of the subscriptions
+* `minPayloadSize` - minimum payload size in bytes; the payload is sent inside a small JSON envelope, so messages on the
+  wire are larger
+* `maxConcurrentOperations` - maximum number of connects or subscribes in flight at a time
+* `telemetryKeys` - telemetry keys used to fill the payload (optional)
+
+## Configuration
+
+Every setting is an environment variable. The full list, with defaults, is in
+[tb-mqtt-broker-performance-tests.yml](src/main/resources/tb-mqtt-broker-performance-tests.yml). These are the ones
+used most.
+
+### Broker connection
+
+* `MQTT_HOST`, `MQTT_PORT` - MQTT address of the broker. Default: `localhost`, `1883`
+* `MQTT_SSL_ENABLED` - connect over TLS. Default: `false`. The `MQTT_SSL_*` variables set the protocol, key store and
+  trust store (`MQTT_SSL_TRUST_STORE_TYPE` also accepts the old name `SECURITY_MQTT_SSL_TRUST_STORE_TYPE`).
+* `TB_URI` - URL of the broker's REST API. Default: `http://localhost:8083`
+* `TB_ADMIN_USERNAME`, `TB_ADMIN_PASSWORD` - system administrator login for the REST API. Default:
+  `sysadmin@thingsboard.org`, `sysadmin`
+* `CLIENT_IP_ADDRESSES` - comma-separated local IP addresses that clients connect from, used in turn. This gets past
+  the limit of about 64k connections from one source address. Default: empty, the system chooses.
+* `CLIENT_KEEP_ALIVE_SECONDS` - MQTT keep-alive of the clients. Default: `600`
+
+### Test run
+
+* `TEST_RUN_CONFIGURATION_FILE` - path to the scenario file. Default: empty, which runs the built-in point-to-point
+  scenario
+* `TEST_RUN_PERSISTENT_CLIENT_TYPE` - `DEVICE` or `APPLICATION`: run every persistent subscriber group of the scenario
+  file with this client type. Default: empty, as in the file
+* `TEST_RUN_PUBLISH_CHUNK_SIZE_DIVIDER` - split each publishing period into this many smaller ticks, so the publishers
+  do not all send at the same moment. Default: `1`
+* `TEST_RUN_MAX_TOTAL_CLIENTS_PER_ITERATION` - number of publishers that send in each publishing period. Default: `0`,
+  which means all of them
+* `TEST_RUN_RECEIVE_THREADS` - number of threads that process received messages. Messages of one subscriber are always
+  processed by the same thread, in order. Default: `0`, which means the number of available processors
+
+### Output
+
+* `STATS_ENABLED` - collect the latency stats and the run totals. Default: `true`. With `false`, the latency lines print
+  no values and the run totals show 0 sent, accepted and received; the lost and duplicated message counts still work.
+* `STATS_PERIOD_SECS` - interval in seconds between latency stats lines. Default: `10`
+* `TEST_RUN_LOGS_MSG_PROCESSING_QUEUE_PERIOD` - interval in milliseconds between the logs of the received-message
+  queue length. Default: `15000`
+
+### Runs on several nodes
+
+* `ORCHESTRATION_NODE` - `true` starts the orchestrator, which coordinates the runners; `false` starts a runner, which
+  creates clients and publishes messages. Read by the Docker image's start script.
+* `HTTP_BIND_PORT` - HTTP port of the orchestrator and the runners. Default: `8088`
+* `TEST_RUN_TEST_ORCHESTRATOR_URL` - URL of the orchestrator
+* `TEST_RUN_TEST_NODE_URL` - URL of this runner
+* `TEST_RUN_SEQUENTIAL_NUMBER` - sequence number of this runner
+* `TEST_RUN_PARALLEL_TESTS_COUNT` - number of runners
+* `TEST_RUN_TOTAL_TESTS_COUNT` - total number of runners when publishers and subscribers run on separate nodes
+* `TEST_RUN_MAX_CLUSTER_WAIT_TIME_SECONDS` - how long, in seconds, the runners and the orchestrator wait for each other
+  to be ready
+* `TEST_RUN_CLUSTER_PROCESS_WAIT_TIME_SECONDS` - how long, in seconds, to wait for clients to connect and subscribe
+* `TEST_RUN_CLEAR_PERSISTED_SESSIONS_WAIT_TIME_SECONDS` - how long, in seconds, to wait for persistent sessions to be
+  cleared
+* `TEST_RUN_WAIT_TIME_MS_AFTER_CLIENTS_DISCONNECT` - how long, in milliseconds, to wait after the clients start
+  disconnecting

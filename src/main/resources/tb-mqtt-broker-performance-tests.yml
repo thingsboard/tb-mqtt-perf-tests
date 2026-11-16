@@ -43,8 +43,8 @@ mqtt:
     trust_store: "${MQTT_SSL_TRUST_STORE:trust-store.jks}"
     # Password used to access the trust store
     trust_store_password: "${MQTT_SSL_TRUST_STORE_PASSWORD:truststore_password}"
-    # Type of the trust store
-    trust_store_type: "${SECURITY_MQTT_SSL_TRUST_STORE_TYPE:JKS}"
+    # Type of the trust store; the old variable name SECURITY_MQTT_SSL_TRUST_STORE_TYPE is still accepted
+    trust_store_type: "${MQTT_SSL_TRUST_STORE_TYPE:${SECURITY_MQTT_SSL_TRUST_STORE_TYPE:JKS}}"
   client:
     keep-alive-seconds: "${CLIENT_KEEP_ALIVE_SECONDS:600}"
     # Comma-separated list of IP addresses
