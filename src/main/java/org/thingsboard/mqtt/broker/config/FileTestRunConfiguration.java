@@ -19,15 +19,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.handler.codec.mqtt.MqttQoS;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
+import org.thingsboard.mqtt.broker.data.PersistentClientType;
 import org.thingsboard.mqtt.broker.data.PublisherGroup;
 import org.thingsboard.mqtt.broker.data.SubscriberGroup;
 
 import java.io.File;
 import java.util.List;
+import java.util.Objects;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 @ConditionalOnExpression("'${test-run.configuration-file:}'!=''")
@@ -37,6 +42,9 @@ public class FileTestRunConfiguration implements TestRunConfiguration {
     @Value("${test-run.configuration-file}")
     private String configurationFilePath;
 
+    @Value("${test-run.persistent-client-type:}")
+    private String persistentClientType;
+
     private File configurationFile;
     private TestRunConfigurationInfo testRunConfigurationInfo;
 
@@ -44,6 +52,17 @@ public class FileTestRunConfiguration implements TestRunConfiguration {
     public void init() throws Exception {
         this.configurationFile = new File(configurationFilePath);
         this.testRunConfigurationInfo = mapper.readValue(configurationFile, TestRunConfigurationInfo.class);
+        if (StringUtils.isNotBlank(persistentClientType)) {
+            overridePersistentClientType(PersistentClientType.valueOf(persistentClientType.trim()));
+        }
+    }
+
+    private void overridePersistentClientType(PersistentClientType clientType) {
+        log.info("Persistent subscriber groups of {} run as {} clients.", configurationFile.getName(), clientType);
+        testRunConfigurationInfo.getSubscriberGroups().stream()
+                .map(SubscriberGroup::getPersistentSessionInfo)
+                .filter(Objects::nonNull)
+                .forEach(info -> info.setClientType(clientType));
     }
 
     @Override

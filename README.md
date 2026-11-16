@@ -27,6 +27,8 @@ Main configuration parameters:
 * TEST_RUN_TEST_ORCHESTRATOR_URL - orchestrator node URL
 * TEST_RUN_TEST_NODE_URL - runner node URL
 * TEST_RUN_CONFIGURATION_FILE - path to performance test configuration file
+* TEST_RUN_PERSISTENT_CLIENT_TYPE - DEVICE or APPLICATION: run every persistent subscriber group of the configuration file
+  with this client type (e.g. the DEVICE-only variant of a scenario). Default: empty, as in the file
 * TEST_RUN_SEQUENTIAL_NUMBER - sequential number of runner nodes
 * TEST_RUN_PARALLEL_TESTS_COUNT - how many test nodes (runners) will be launched
 * TEST_RUN_TOTAL_TESTS_COUNT - sum of test nodes when subscribers and publishers are separated

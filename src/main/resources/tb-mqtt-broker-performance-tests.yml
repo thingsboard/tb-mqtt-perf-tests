@@ -83,6 +83,8 @@ test-run:
   # "p2p" or "point-to-point" refers to a 1 publisher to 1 subscriber configuration.
   # Use TEST_RUN_DEFAULT_PUB_SUB_GROUPS_COUNT to define the number of p2p groups.
   configuration-file: "${TEST_RUN_CONFIGURATION_FILE:}"
+  # Empty runs the configuration file as written; DEVICE or APPLICATION sets the client type of every persistent subscriber group in it
+  persistent-client-type: "${TEST_RUN_PERSISTENT_CLIENT_TYPE:}"
 
   # Could be ORCHESTRATOR or RUNNER
   orchestrator-url: "${TEST_RUN_TEST_ORCHESTRATOR_URL:}"
