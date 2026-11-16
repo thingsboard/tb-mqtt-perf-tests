@@ -202,7 +202,7 @@ public class MqttPerformanceTest {
         log.info("Latency stats: median - {}, avg - {}, max - {}, min - {}, 95th - {}, total received messages - {}, " +
                         "publish sent messages - {}, publish sent latency avg - {}, publish sent latency max - {}, " +
                         "publish acknowledged messages - {}, publish acknowledged latency median - {}, publish acknowledged latency avg - {}, publish acknowledged latency max - {}, " +
-                        "publish acknowledged latency 95th - {}, msg processing latency max - {}, 99th - {}, publish acknowledged latency 99th - {}.",
+                        "publish acknowledged latency 95th - {}, msg processing latency max - {}, e2e latency 99th - {}, publish acknowledged latency 99th - {}.",
                 generalLatencyStats.getPercentile(50),
                 generalLatencyStats.getMean(), generalLatencyStats.getMax(),
                 generalLatencyStats.getMin(), generalLatencyStats.getPercentile(95),
