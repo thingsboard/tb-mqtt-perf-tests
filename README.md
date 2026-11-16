@@ -36,3 +36,5 @@ Main configuration parameters:
 * TEST_RUN_CLEAR_PERSISTED_SESSIONS_WAIT_TIME_SECONDS - max time in seconds to wait to clear persisted sessions
 * TEST_RUN_WAIT_TIME_MS_AFTER_CLIENTS_DISCONNECT - time in milliseconds to sleep after the clients started disconnecting
 * TEST_RUN_MAX_TOTAL_CLIENTS_PER_ITERATION - max number out of all publishers that will be used per publishing iteration
+* TEST_RUN_RECEIVE_THREADS - number of threads that process received messages (messages of one subscriber are always
+  processed by the same thread, in order). Default: 0, which means the number of available processors

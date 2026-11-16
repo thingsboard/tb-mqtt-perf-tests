@@ -20,5 +20,5 @@ import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import java.util.function.BiConsumer;
 
 public interface ReceivedMsgProcessor {
-    void processIncomingMessage(MqttPublishMessage message, BiConsumer<MqttPublishMessage, Long> msgProcessor);
+    void processIncomingMessage(String clientId, MqttPublishMessage message, BiConsumer<MqttPublishMessage, Long> msgProcessor);
 }

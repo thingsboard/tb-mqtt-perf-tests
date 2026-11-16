@@ -35,7 +35,7 @@ or [broker-tests-subscribers-config.yml](broker-tests-subscribers-config.yml).
 * dummyClients - number of dummy clients that will be only connected to the broker
 * secondsToRun - seconds to run the test (publishing of messages)
 * additionalSecondsToWait - seconds to wait additionally after publishing is finished
-* maxMsgsPerPublisherPerSecond - max number of messages sent per publisher per second
+* maxMsgsPerPublisherPerSecond - max number of messages sent per publisher per second (decimals are accepted, e.g. 1.1)
 * publisherQosValue - publish QoS
 * subscriberQosValue - subscribe QoS
 * minPayloadSize - min payload size that will be generated

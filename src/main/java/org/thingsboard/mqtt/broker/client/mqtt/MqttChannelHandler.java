@@ -115,7 +115,7 @@ final class MqttChannelHandler extends SimpleChannelInboundHandler<MqttMessage> 
     }
 
     private void processIncomingMessage(MqttPublishMessage message) {
-        receivedMsgProcessor.processIncomingMessage(message, this::invokeHandlers);
+        receivedMsgProcessor.processIncomingMessage(client.getClientConfig().getClientId(), message, this::invokeHandlers);
     }
 
     private void invokeHandlers(MqttPublishMessage message, long receivedTime) {

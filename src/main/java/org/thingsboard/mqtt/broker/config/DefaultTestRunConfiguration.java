@@ -55,7 +55,7 @@ public class DefaultTestRunConfiguration implements TestRunConfiguration {
     private int dummyClients;
 
     @Value("${test-run.default.max-msgs-per-publisher-per-second:1}")
-    private int maxMsgsPerPublisherPerSecond;
+    private double maxMsgsPerPublisherPerSecond;
 
     @Value("${test-run.default.publisher-qos:0}")
     private int publisherQos;
@@ -93,7 +93,7 @@ public class DefaultTestRunConfiguration implements TestRunConfiguration {
     }
 
     @Override
-    public int getMaxMessagesPerPublisherPerSecond() {
+    public double getMaxMessagesPerPublisherPerSecond() {
         return maxMsgsPerPublisherPerSecond;
     }
 
@@ -109,7 +109,7 @@ public class DefaultTestRunConfiguration implements TestRunConfiguration {
 
     @Override
     public int getTotalPublisherMessagesCount() {
-        return secondsToRun * maxMsgsPerPublisherPerSecond;
+        return (int) Math.round(maxMsgsPerPublisherPerSecond * secondsToRun);
     }
 
     @Override

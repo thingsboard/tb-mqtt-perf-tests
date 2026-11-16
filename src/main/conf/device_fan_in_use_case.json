@@ -1,0 +1,92 @@
+{
+  "publisherGroups": [
+    {
+      "id": 1,
+      "publishers": 2000,
+      "topicPrefix": "usa/xswbn/1/",
+      "clientIdPrefix": null
+    },
+    {
+      "id": 2,
+      "publishers": 2000,
+      "topicPrefix": "usa/ughnj/2/",
+      "clientIdPrefix": null
+    },
+    {
+      "id": 3,
+      "publishers": 2000,
+      "topicPrefix": "usa/jgwgr/3/",
+      "clientIdPrefix": null
+    },
+    {
+      "id": 4,
+      "publishers": 2000,
+      "topicPrefix": "usa/lrzcp/4/",
+      "clientIdPrefix": null
+    }
+  ],
+  "subscriberGroups": [
+    {
+      "id": 1,
+      "subscribers": 1,
+      "topicFilter": "usa/xswbn/1/+",
+      "expectedPublisherGroups": [
+        1
+      ],
+      "persistentSessionInfo": {
+        "clientType": "DEVICE"
+      },
+      "clientIdPrefix": null
+    },
+    {
+      "id": 2,
+      "subscribers": 1,
+      "topicFilter": "usa/ughnj/2/+",
+      "expectedPublisherGroups": [
+        2
+      ],
+      "persistentSessionInfo": {
+        "clientType": "DEVICE"
+      },
+      "clientIdPrefix": null
+    },
+    {
+      "id": 3,
+      "subscribers": 1,
+      "topicFilter": "usa/jgwgr/3/+",
+      "expectedPublisherGroups": [
+        3
+      ],
+      "persistentSessionInfo": {
+        "clientType": "DEVICE"
+      },
+      "clientIdPrefix": null
+    },
+    {
+      "id": 4,
+      "subscribers": 1,
+      "topicFilter": "usa/lrzcp/4/+",
+      "expectedPublisherGroups": [
+        4
+      ],
+      "persistentSessionInfo": {
+        "clientType": "DEVICE"
+      },
+      "clientIdPrefix": null
+    }
+  ],
+  "dummyClients": 0,
+  "secondsToRun": 60000,
+  "additionalSecondsToWait": 30,
+  "maxMsgsPerPublisherPerSecond": 10,
+  "publisherQosValue": 1,
+  "subscriberQosValue": 1,
+  "minPayloadSize": 1,
+  "telemetryKeys": [
+    "temperature",
+    "humidity",
+    "longitude",
+    "latitude"
+  ],
+  "maxConcurrentOperations": 1000
+}

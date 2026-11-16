@@ -182,7 +182,8 @@ public class PublisherServiceImpl implements PublisherService {
         DescriptiveStatistics publishSentLatencyStats = new DescriptiveStatistics();
         DescriptiveStatistics publishAcknowledgedStats = new DescriptiveStatistics();
         AtomicInteger publishedMessagesPerPublisher = new AtomicInteger();
-        int publishPeriodMs = 1000 / testRunConfiguration.getMaxMessagesPerPublisherPerSecond();
+        // truncation, not rounding, keeps the period of integer rates what it was with integer division
+        int publishPeriodMs = (int) (1000 / testRunConfiguration.getMaxMessagesPerPublisherPerSecond());
         AtomicLong lastPublishTickTime = new AtomicLong(System.currentTimeMillis());
 
         int shortenedPublishPeriodMs = publishPeriodMs / chunkSizeDivider;

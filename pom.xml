@@ -304,7 +304,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>3.0.0-M1</version>
+                    <version>3.5.4</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -678,6 +678,12 @@
                 <artifactId>log4j-to-slf4j</artifactId>
                 <version>${log4j.version}</version>
             </dependency>
+            <!-- Transitive via spring-boot-starter-logging; pinned so that the slf4j-api 2.0.11 that json-path brings in through the test-scoped spring-boot-starter-test cannot downgrade it -->
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>2.0.17</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -742,6 +748,12 @@
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
             <version>${guava.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <version>${spring-boot.version}</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
