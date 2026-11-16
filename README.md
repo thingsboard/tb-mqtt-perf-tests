@@ -61,8 +61,8 @@ clients. See the [k8s README](k8s/README.md).
 The scenario files are in [src/main/conf](src/main/conf). Each file holds its own client counts, rates, QoS and run
 length; the list below describes their shape.
 
-* `simple_use_case.json` - publisher groups on separate topics; some groups have one APPLICATION subscriber each, the
-  others none.
+* `simple_use_case.json` - publisher groups on separate topics, each read by one APPLICATION subscriber. The file also
+  has empty groups (0 publishers, 0 subscribers) that you can turn on.
 * `general_use_case.json` - a mixed load: non-persistent, APPLICATION and DEVICE subscribers on single-level (`+`) and
   multi-level (`#`) wildcard filters that overlap, plus idle dummy clients.
 * `fan_in_use_case.json` - large publisher groups, each read by one APPLICATION subscriber.
